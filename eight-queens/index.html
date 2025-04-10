@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>هشت وزیر</title>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f9f9f9;
+      }
+
+      h1,
+      h2 {
+        color: #333;
+        text-align: center;
+      }
+
+      .controls {
+        background-color: #e6e6e6;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+
+      .board {
+        border: 3px solid #555;
+        display: inline-block;
+        margin: 20px auto;
+      }
+
+      .row {
+        display: flex;
+      }
+
+      .cell {
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .light {
+        background-color: #f0d9b5;
+      }
+
+      .dark {
+        background-color: #b58863;
+      }
+
+      .queen {
+        font-size: 35px;
+        color: #c00;
+      }
+
+      button {
+        padding: 8px 15px;
+        margin: 5px;
+        background-color: #4a7;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        background-color: #aaa;
+        cursor: not-allowed;
+      }
+
+      .slider-container {
+        margin: 15px 0;
+      }
+
+      .stats {
+        font-size: 18px;
+        margin-top: 15px;
+      }
+
+      .trying {
+        background-color: #9f9 !important;
+      }
+
+      .conflict {
+        background-color: #f99 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>مسئله هشت وزیر</h1>
+    <div class="controls">
+      <div>
+        <label>اندازه صفحه شطرنج:</label>
+        <select id="sizeSelect">
+          <option value="4">4x4</option>
+          <option value="5">5x5</option>
+          <option value="6">6x6</option>
+          <option value="7">7x7</option>
+          <option value="8" selected>8x8</option>
+        </select>
+      </div>
+
+      <div class="slider-container">
+        <label>سرعت: <span id="speedText">میانه</span></label>
+        <input type="range" id="speedSlider" min="1" max="100" value="50" />
+      </div>
+
+      <div>
+        <button id="solveBtn">نمایش راه حل</button>
+        <button id="nextBtn" disabled>راه حل بعدی</button>
+        <button id="resetBtn">از نو</button>
+      </div>
+    </div>
+
+    <div id="boardArea"></div>
+
+    <div class="stats">
+      <p>حل کنونی: <span id="currentSol">0</span></p>
+      <p>تعداد کل حل مسئله: <span id="totalSol">?</span></p>
+    </div>
+
+    <script>
+      let boardSize = 8;
+      let solutions = [];
+      let currentSolution = 0;
+      let isSolving = false;
+      let animationSpeed = 50;
+      let animationSteps = [];
+      let isAnimating = false;
+
+      const sizeSelect = document.getElementById("sizeSelect");
+      const speedSlider = document.getElementById("speedSlider");
+      const speedText = document.getElementById("speedText");
+      const solveBtn = document.getElementById("solveBtn");
+      const nextBtn = document.getElementById("nextBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const boardArea = document.getElementById("boardArea");
+      const currentSol = document.getElementById("currentSol");
+      const totalSol = document.getElementById("totalSol");
+
+      function setupBoard() {
+        boardArea.innerHTML = "";
+        const board = document.createElement("div");
+        board.className = "board";
+
+        for (let r = 0; r < boardSize; r++) {
+          const row = document.createElement("div");
+          row.className = "row";
+
+          for (let c = 0; c < boardSize; c++) {
+            const cell = document.createElement("div");
+            cell.className = (r + c) % 2 === 0 ? "cell light" : "cell dark";
+            cell.dataset.row = r;
+            cell.dataset.col = c;
+            row.appendChild(cell);
+          }
+
+          board.appendChild(row);
+        }
+
+        boardArea.appendChild(board);
+      }
+
+      function showSolution(solution) {
+        clearBoard();
+
+        solution.forEach((col, row) => {
+          const cell = document.querySelector(
+            `.cell[data-row="${row}"][data-col="${col}"]`
+          );
+          if (cell) {
+            const queen = document.createElement("div");
+            queen.className = "queen";
+            queen.textContent = "♛";
+            cell.appendChild(queen);
+          }
+        });
+
+        currentSol.textContent = currentSolution + 1;
+      }
+
+      function clearBoard() {
+        document.querySelectorAll(".cell").forEach((cell) => {
+          cell.innerHTML = "";
+          cell.classList.remove("trying", "conflict");
+        });
+      }
+
+      speedSlider.addEventListener("input", function () {
+        animationSpeed = 101 - this.value;
+        if (this.value < 30) speedText.textContent = "کند";
+        else if (this.value < 70) speedText.textContent = "متوسط";
+        else speedText.textContent = "سریع";
+      });
+
+      function solve() {
+        solutions = [];
+        currentSolution = 0;
+        const board = Array(boardSize)
+          .fill()
+          .map(() => Array(boardSize).fill(false));
+
+        function isSafe(row, col) {
+          for (let i = 0; i < col; i++) {
+            if (board[row][i]) {
+              animationSteps.push({ type: "conflict", row, col: i });
+              // console.log(`row ${row} and column ${i} is not safe!`);
+              return false;
+            }
+          }
+
+          for (let i = row, j = col; i >= 0 && j >= 0; i--, j--) {
+            if (board[i][j]) {
+              animationSteps.push({ type: "conflict", row: i, col: j });
+              // console.log(`row ${row} and column ${i} is not safe!`);
+              return false;
+            }
+          }
+
+          for (let i = row, j = col; i < boardSize && j >= 0; i++, j--) {
+            if (board[i][j]) {
+              animationSteps.push({ type: "conflict", row: i, col: j });
+              // console.log(`row ${row} and column ${i} is not safe!`);
+              return false;
+            }
+          }
+          // console.log(`row ${row} and column ${col} is SAFE!`);
+          return true;
+        }
+
+        // backtracking
+        function placeQueens(col) {
+          if (col >= boardSize) {
+            const solution = [];
+            for (let r = 0; r < boardSize; r++) {
+              for (let c = 0; c < boardSize; c++) {
+                if (board[r][c]) {
+                  solution.push(c);
+                  break;
+                }
+              }
+            }
+            solutions.push(solution);
+            animationSteps.push({ type: "solution", solution });
+            return;
+          }
+
+          for (let row = 0; row < boardSize; row++) {
+            animationSteps.push({ type: "try", row, col });
+
+            if (isSafe(row, col)) {
+              board[row][col] = true;
+              placeQueens(col + 1);
+
+              board[row][col] = false;
+              animationSteps.push({ type: "remove", row, col });
+            } else {
+              animationSteps.push({ type: "remove", row, col });
+            }
+          }
+        }
+
+        placeQueens(0);
+        playAnimation();
+      }
+
+      // animation steps
+      function playAnimation() {
+        if (animationSteps.length === 0) {
+          isAnimating = false;
+          return;
+        }
+
+        isAnimating = true;
+        const step = animationSteps.shift();
+
+        if (step.type === "try") {
+          const cell = document.querySelector(
+            `.cell[data-row="${step.row}"][data-col="${step.col}"]`
+          );
+          if (cell) {
+            cell.classList.add("trying");
+            const queen = document.createElement("div");
+            queen.className = "queen";
+            queen.textContent = "♛";
+            cell.appendChild(queen);
+          }
+        } else if (step.type === "remove") {
+          const cell = document.querySelector(
+            `.cell[data-row="${step.row}"][data-col="${step.col}"]`
+          );
+          if (cell) {
+            cell.classList.remove("trying", "conflict");
+            cell.innerHTML = "";
+          }
+        } else if (step.type === "conflict") {
+          const cell = document.querySelector(
+            `.cell[data-row="${step.row}"][data-col="${step.col}"]`
+          );
+          if (cell) cell.classList.add("conflict");
+        } else if (step.type === "solution") {
+          solutions.push(step.solution);
+          totalSol.textContent = solutions.length;
+          currentSolution = solutions.length - 1;
+          showSolution(step.solution);
+          solveBtn.textContent = "حل";
+          solveBtn.disabled = false;
+          nextBtn.disabled = solutions.length <= 1;
+          isSolving = false;
+          return;
+        }
+
+        setTimeout(playAnimation, animationSpeed);
+      }
+
+      sizeSelect.addEventListener("change", function () {
+        boardSize = parseInt(this.value);
+        resetPuzzle();
+      });
+
+      solveBtn.addEventListener("click", function () {
+        if (!isSolving) {
+          isSolving = true;
+          solveBtn.textContent = "در حال حل مسئله...";
+          solveBtn.disabled = true;
+          nextBtn.disabled = true;
+          clearBoard();
+
+          setTimeout(() => {
+            animationSteps = [];
+            solve();
+          }, 100);
+        }
+      });
+
+      nextBtn.addEventListener("click", function () {
+        if (solutions.length > 0) {
+          currentSolution = (currentSolution + 1) % solutions.length;
+          showSolution(solutions[currentSolution]);
+        }
+      });
+
+      resetBtn.addEventListener("click", resetPuzzle);
+
+      function resetPuzzle() {
+        solutions = [];
+        currentSolution = 0;
+        currentSol.textContent = "0";
+        totalSol.textContent = "?";
+        solveBtn.textContent = "نمایش راه حل";
+        solveBtn.disabled = false;
+        nextBtn.disabled = true;
+        isSolving = false;
+        animationSteps = [];
+        setupBoard();
+      }
+
+      setupBoard();
+    </script>
+  </body>
+</html>
