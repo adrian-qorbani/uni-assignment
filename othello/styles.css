@@ -66,7 +66,7 @@ h1 {
     grid-template-columns: repeat(8, 50px);
     grid-template-rows: repeat(8, 50px);
     gap: 2px;
-    background-color: #daabd5;
+    background-color: #a868a2;
     padding: 10px;
     border-radius: 5px;
     margin: 0 auto 20px;
@@ -75,7 +75,7 @@ h1 {
 .cell {
     width: 50px;
     height: 50px;
-    background-color: #0a5c36;
+    background-color: #c5abc4;
     border-radius: 3px;
     display: flex;
     justify-content: center;
@@ -85,7 +85,7 @@ h1 {
 }
 
 .cell:hover {
-    background-color: #0d7a4a;
+    background-color: #7a0d68;
 }
 
 .disc-placed {
